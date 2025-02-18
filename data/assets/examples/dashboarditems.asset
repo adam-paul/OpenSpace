@@ -44,28 +44,28 @@ local Mission = {
 
 local PropertyValue = {
   Type = "DashboardItemPropertyValue",
-  Identifier = "DashbaordItemPropertyValue",
+  Identifier = "DashboardItemPropertyValue",
   URI = "Scene.Earth.Renderable.Enabled",
   DisplayString = "Earth is enabled: {}"
 }
 
 local PropertyValueFloat = {
   Type = "DashboardItemPropertyValue",
-  Identifier = "DashbaordItemPropertyValue_Float",
+  Identifier = "DashboardItemPropertyValue_Float",
   URI = "Scene.Earth.Renderable.TargetLodScaleFactor",
   DisplayString = "Earth LOD is {:.5f}"
 }
 
 local PropertyValueDouble = {
   Type = "DashboardItemPropertyValue",
-  Identifier = "DashbaordItemPropertyValue_Double",
+  Identifier = "DashboardItemPropertyValue_Double",
   URI = "NavigationHandler.PathNavigator.ArrivalDistanceFactor",
   DisplayString = "Arrival Distance Factor is {:.8f}"
 }
 
 local PropertyValueInt = {
   Type = "DashboardItemPropertyValue",
-  Identifier = "DashbaordItemPropertyValue_Int",
+  Identifier = "DashboardItemPropertyValue_Int",
   URI = "LuaConsole.HistoryLength",
   DisplayString = "History length is {}"
 }
