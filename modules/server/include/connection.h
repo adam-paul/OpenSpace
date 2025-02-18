@@ -66,6 +66,12 @@ public:
     std::thread& thread();
     void setThread(std::thread&& thread);
 
+    template<typename T>
+    void registerTopic(const std::string& name) {
+        static_assert(std::is_base_of_v<Topic, T>, "T must derive from Topic");
+        _topicFactory.registerClass<T>(name);
+    }
+
 private:
     ghoul::TemplateFactory<Topic> _topicFactory;
     std::map<TopicId, std::unique_ptr<Topic>> _topics;

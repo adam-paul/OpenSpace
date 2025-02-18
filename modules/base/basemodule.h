@@ -29,8 +29,11 @@
 
 #include <ghoul/opengl/programobjectmanager.h>
 #include <ghoul/opengl/texturemanager.h>
+#include <memory>
 
 namespace openspace {
+
+class VoiceCommandHandler;
 
 class BaseModule : public OpenSpaceModule {
 public:
@@ -45,9 +48,17 @@ public:
     static ghoul::opengl::ProgramObjectManager ProgramObjectManager;
     static ghoul::opengl::TextureManager TextureManager;
 
+    /**
+     * Returns the voice command handler instance
+     */
+    VoiceCommandHandler* voiceCommandHandler() const;
+
 protected:
     void internalInitialize(const ghoul::Dictionary&) override;
     void internalDeinitializeGL() override;
+
+private:
+    std::unique_ptr<VoiceCommandHandler> _voiceCommandHandler;
 };
 
 } // namespace openspace

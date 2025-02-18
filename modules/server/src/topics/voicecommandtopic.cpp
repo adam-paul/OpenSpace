@@ -22,67 +22,27 @@
  * OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                                         *
  ****************************************************************************************/
 
-#ifndef __OPENSPACE_MODULE_SERVER___SERVERINTERFACE___H__
-#define __OPENSPACE_MODULE_SERVER___SERVERINTERFACE___H__
+#include <modules/server/include/topics/voicecommandtopic.h>
 
-#include <openspace/properties/propertyowner.h>
-#include <openspace/properties/stringproperty.h>
-#include <openspace/properties/optionproperty.h>
-#include <openspace/properties/list/stringlistproperty.h>
-#include <openspace/properties/scalar/boolproperty.h>
-#include <openspace/properties/scalar/intproperty.h>
+#include <modules/server/include/connection.h>
+#include <openspace/json.h>
+#include <ghoul/logging/logmanager.h>
 
-namespace ghoul::io { class SocketServer; }
+namespace {
+    constexpr std::string_view _loggerCat = "VoiceCommandTopic";
+} // namespace
 
 namespace openspace {
 
-class Connection;
+void VoiceCommandTopic::handleJson(const nlohmann::json& json) {
+    // Just bounce back the message for now
+    // In the future, we'll handle different types of voice command messages here
+    _connection->sendJson(json);
+}
 
-class ServerInterface : public properties::PropertyOwner {
-public:
-    static std::unique_ptr<ServerInterface> createFromDictionary(
-        const ghoul::Dictionary& dictionary);
+bool VoiceCommandTopic::isDone() const {
+    // Keep the topic alive for the entire session
+    return false;
+}
 
-    explicit ServerInterface(const ghoul::Dictionary& dictionary);
-    virtual ~ServerInterface() override = default;
-
-    void initialize();
-    void deinitialize();
-    bool isEnabled() const;
-    bool isActive() const;
-    int port() const;
-    std::string password() const;
-    bool clientHasAccessWithoutPassword(const std::string& address) const;
-    bool clientIsBlocked(const std::string& address) const;
-
-    ghoul::io::SocketServer* server();
-    Connection* connection() const;
-
-private:
-    enum class InterfaceType : int {
-        TcpSocket = 0,
-        WebSocket
-    };
-
-    enum class Access : int {
-        Deny = 0,
-        RequirePassword,
-        Allow
-    };
-
-    properties::OptionProperty _socketType;
-    properties::IntProperty _port;
-    properties::BoolProperty _enabled;
-    properties::StringListProperty _allowAddresses;
-    properties::StringListProperty _requirePasswordAddresses;
-    properties::StringListProperty _denyAddresses;
-    properties::OptionProperty _defaultAccess;
-    properties::StringProperty _password;
-
-    std::unique_ptr<ghoul::io::SocketServer> _socketServer;
-    std::unique_ptr<Connection> _connection;
-};
-
-} // namespace openspace
-
-#endif // __OPENSPACE_MODULE_SERVER___SERVERINTERFACE___H__
+} // namespace openspace 

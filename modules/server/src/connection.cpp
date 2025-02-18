@@ -45,6 +45,7 @@
 #include <modules/server/include/topics/topic.h>
 #include <modules/server/include/topics/triggerpropertytopic.h>
 #include <modules/server/include/topics/versiontopic.h>
+#include <modules/server/include/topics/voicecommandtopic.h>
 #include <openspace/engine/configuration.h>
 #include <openspace/engine/globals.h>
 #include <ghoul/format.h>
@@ -105,6 +106,7 @@ Connection::Connection(std::unique_ptr<ghoul::io::Socket> s, std::string address
     _topicFactory.registerClass<TimeTopic>("time");
     _topicFactory.registerClass<TriggerPropertyTopic>("trigger");
     _topicFactory.registerClass<VersionTopic>("version");
+    _topicFactory.registerClass<VoiceCommandTopic>("voice");
 }
 
 void Connection::handleMessage(const std::string& message) {

@@ -22,67 +22,29 @@
  * OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                                         *
  ****************************************************************************************/
 
-#ifndef __OPENSPACE_MODULE_SERVER___SERVERINTERFACE___H__
-#define __OPENSPACE_MODULE_SERVER___SERVERINTERFACE___H__
+#ifndef __OPENSPACE_MODULE_SERVER___VOICE_COMMAND_TOPIC___H__
+#define __OPENSPACE_MODULE_SERVER___VOICE_COMMAND_TOPIC___H__
 
-#include <openspace/properties/propertyowner.h>
-#include <openspace/properties/stringproperty.h>
-#include <openspace/properties/optionproperty.h>
-#include <openspace/properties/list/stringlistproperty.h>
-#include <openspace/properties/scalar/boolproperty.h>
-#include <openspace/properties/scalar/intproperty.h>
-
-namespace ghoul::io { class SocketServer; }
+#include <modules/server/include/topics/topic.h>
 
 namespace openspace {
 
-class Connection;
-
-class ServerInterface : public properties::PropertyOwner {
+/**
+ * Topic for handling voice command messages between the frontend and backend.
+ * This topic handles:
+ * - Voice recording status updates
+ * - Transcription results
+ * - Error messages
+ */
+class VoiceCommandTopic : public Topic {
 public:
-    static std::unique_ptr<ServerInterface> createFromDictionary(
-        const ghoul::Dictionary& dictionary);
+    VoiceCommandTopic() = default;
+    ~VoiceCommandTopic() override = default;
 
-    explicit ServerInterface(const ghoul::Dictionary& dictionary);
-    virtual ~ServerInterface() override = default;
-
-    void initialize();
-    void deinitialize();
-    bool isEnabled() const;
-    bool isActive() const;
-    int port() const;
-    std::string password() const;
-    bool clientHasAccessWithoutPassword(const std::string& address) const;
-    bool clientIsBlocked(const std::string& address) const;
-
-    ghoul::io::SocketServer* server();
-    Connection* connection() const;
-
-private:
-    enum class InterfaceType : int {
-        TcpSocket = 0,
-        WebSocket
-    };
-
-    enum class Access : int {
-        Deny = 0,
-        RequirePassword,
-        Allow
-    };
-
-    properties::OptionProperty _socketType;
-    properties::IntProperty _port;
-    properties::BoolProperty _enabled;
-    properties::StringListProperty _allowAddresses;
-    properties::StringListProperty _requirePasswordAddresses;
-    properties::StringListProperty _denyAddresses;
-    properties::OptionProperty _defaultAccess;
-    properties::StringProperty _password;
-
-    std::unique_ptr<ghoul::io::SocketServer> _socketServer;
-    std::unique_ptr<Connection> _connection;
+    void handleJson(const nlohmann::json& json) override;
+    bool isDone() const override;
 };
 
 } // namespace openspace
 
-#endif // __OPENSPACE_MODULE_SERVER___SERVERINTERFACE___H__
+#endif // __OPENSPACE_MODULE_SERVER___VOICE_COMMAND_TOPIC___H__ 

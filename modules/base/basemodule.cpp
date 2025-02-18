@@ -84,6 +84,7 @@
 #include <modules/base/translation/statictranslation.h>
 #include <modules/base/timeframe/timeframeinterval.h>
 #include <modules/base/timeframe/timeframeunion.h>
+#include <modules/base/voicecommandhandler.h>
 #include <openspace/documentation/documentation.h>
 #include <openspace/rendering/renderable.h>
 #include <openspace/rendering/screenspacerenderable.h>
@@ -97,9 +98,11 @@ namespace openspace {
 ghoul::opengl::ProgramObjectManager BaseModule::ProgramObjectManager;
 ghoul::opengl::TextureManager BaseModule::TextureManager;
 
-BaseModule::BaseModule() : OpenSpaceModule(BaseModule::Name) {}
+BaseModule::BaseModule() : OpenSpaceModule(BaseModule::Name) {
+    _voiceCommandHandler = std::make_unique<VoiceCommandHandler>();
+}
 
-void BaseModule::internalInitialize(const ghoul::Dictionary&) {
+void BaseModule::internalInitialize(const ghoul::Dictionary& dict) {
     ghoul::TemplateFactory<ScreenSpaceRenderable>* fSsRenderable =
         FactoryManager::ref().factory<ScreenSpaceRenderable>();
     ghoul_assert(fSsRenderable, "ScreenSpaceRenderable factory was not created");
@@ -218,11 +221,24 @@ void BaseModule::internalInitialize(const ghoul::Dictionary&) {
     fTranslation->registerClass<LuaTranslation>("LuaTranslation");
     fTranslation->registerClass<MultiTranslation>("MultiTranslation");
     fTranslation->registerClass<StaticTranslation>("StaticTranslation");
+
+    // Initialize voice command handler
+    if (_voiceCommandHandler) {
+        _voiceCommandHandler->initialize();
+    }
 }
 
 void BaseModule::internalDeinitializeGL() {
+    if (_voiceCommandHandler) {
+        _voiceCommandHandler->deinitialize();
+    }
+
     ProgramObjectManager.releaseAll(ghoul::opengl::ProgramObjectManager::Warnings::Yes);
     TextureManager.releaseAll(ghoul::opengl::TextureManager::Warnings::Yes);
+}
+
+VoiceCommandHandler* BaseModule::voiceCommandHandler() const {
+    return _voiceCommandHandler.get();
 }
 
 std::vector<documentation::Documentation> BaseModule::documentations() const {
