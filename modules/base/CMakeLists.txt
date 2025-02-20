@@ -211,3 +211,15 @@ target_precompile_headers(${base_module} PRIVATE
   <future>
   <map>
 )
+
+# Install voice command scripts
+install(
+    FILES
+        ${CMAKE_CURRENT_SOURCE_DIR}/scripts/voice/voice_service.py
+        ${CMAKE_CURRENT_SOURCE_DIR}/scripts/voice/requirements.txt
+    DESTINATION ${OPENSPACE_MODULE_DIRECTORY}/base/scripts/voice
+    PERMISSIONS
+        OWNER_READ OWNER_WRITE OWNER_EXECUTE
+        GROUP_READ GROUP_EXECUTE
+        WORLD_READ WORLD_EXECUTE
+)

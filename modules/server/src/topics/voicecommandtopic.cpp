@@ -151,19 +151,19 @@ void VoiceCommandTopic::sendStateUpdate() {
         "Sending voice state update: {} to client", stateStr
     ));
 
+    // Always include transcription and error fields, even if empty
     const std::string transcription = _voiceHandler->transcription();
-    if (!transcription.empty()) {
-        stateJson[TranscriptionKey] = transcription;
-        LDEBUG(std::format("Including transcription: {}", transcription));
-    }
+    stateJson[TranscriptionKey] = transcription;
+    LDEBUG(std::format("Including transcription: {}", transcription));
 
     const std::string error = _voiceHandler->error();
+    stateJson[ErrorKey] = error;
     if (!error.empty()) {
-        stateJson[ErrorKey] = error;
         LDEBUG(std::format("Including error: {}", error));
     }
 
     LDEBUG("Sending WebSocket message to client");
+    LDEBUG(std::format("Full state update: {}", stateJson.dump()));
     _connection->sendJson(wrappedPayload(stateJson));
 }
 

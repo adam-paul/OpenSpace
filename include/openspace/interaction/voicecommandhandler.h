@@ -138,6 +138,11 @@ public:
      */
     static openspace::scripting::LuaLibrary luaLibrary();
 
+    /**
+     * Cleans up the temporary audio file if it exists
+     */
+    void cleanupAudioFile();
+
 private:
     /**
      * Ensures the temporary directory for voice command scripts exists
@@ -182,6 +187,8 @@ private:
     std::vector<float> _capturedAudio;
     static constexpr uint32_t _sampleRate = 16000; // Whisper expects 16kHz
     static constexpr uint32_t _channels = 1;  // Mono audio for speech
+    std::string _lastAudioPath;  // Path to the last saved audio file
+    bool _needsRetry = false;  // Whether transcription needs to be retried
 
     // Audio callback function - implementation in cpp file
     static void audioDataCallback(ma_device* pDevice, void* pOutput, const void* pInput, uint32_t frameCount);
@@ -192,6 +199,8 @@ private:
 
     int _nextCallbackHandle = 0;
     std::map<CallbackHandle, StateChangeCallback> _stateChangeCallbacks;
+
+    bool saveAudioToTemp();  // Saves captured audio to temporary file
 };
 
 } // namespace interaction

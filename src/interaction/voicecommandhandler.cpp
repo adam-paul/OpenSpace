@@ -8,6 +8,7 @@
 #include <modules/server/servermodule.h>
 #include <modules/server/include/topics/voicecommandtopic.h>
 #include <modules/server/include/connection.h>
+#include <modules/base/basemodule.h>
 #include <ghoul/logging/logmanager.h>
 #include <ghoul/filesystem/filesystem.h>
 #include <filesystem>
@@ -210,9 +211,71 @@ bool VoiceCommandHandler::stopRecording() {
         "Captured {} samples ({:.2f} seconds) of audio data at {}Hz",
         _capturedAudio.size(), durationSeconds, _sampleRate
     ));
+
+    // Save the audio data to a temporary file
+    if (!saveAudioToTemp()) {
+        setError("Failed to save audio data");
+        setState(VoiceState::Error);
+        return false;
+    }
     
-    setTranscription("Audio capture complete");
+    // Process the audio data through Whisper
+    const std::string transcription = processAudioData();
+    LDEBUG(std::format("processAudioData returned transcription: '{}'", transcription));
+    
+    if (transcription.empty()) {
+        LERROR("processAudioData returned empty transcription");
+        // processAudioData will have set the error message if it failed
+        setState(VoiceState::Error);
+        return false;
+    }
+
+    LINFO(std::format("Setting transcription: '{}'", transcription));
+    // Update the transcription (this will also set state to Idle)
+    setTranscription(transcription);
     return true;
+}
+
+bool VoiceCommandHandler::saveAudioToTemp() {
+    namespace fs = std::filesystem;
+    
+    // Generate a unique filename with timestamp
+    const auto now = std::chrono::system_clock::now();
+    const auto timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
+        now.time_since_epoch()
+    ).count();
+    
+    const fs::path audioPath = _tempDirectory / std::format("audio_{}.raw", timestamp);
+    
+    try {
+        std::ofstream outFile(audioPath, std::ios::binary);
+        if (!outFile) {
+            LERROR(std::format("Failed to open file for writing: {}", audioPath.string()));
+            return false;
+        }
+        
+        // Write raw PCM data
+        outFile.write(
+            reinterpret_cast<const char*>(_capturedAudio.data()),
+            _capturedAudio.size() * sizeof(float)
+        );
+        
+        if (!outFile) {
+            LERROR("Failed to write audio data to file");
+            return false;
+        }
+        
+        outFile.close();
+        LINFO(std::format("Saved audio data to {}", audioPath.string()));
+        
+        // Store the path for later use by the Python service
+        _lastAudioPath = audioPath.string();
+        return true;
+    }
+    catch (const std::exception& e) {
+        LERROR(std::format("Exception while saving audio: {}", e.what()));
+        return false;
+    }
 }
 
 bool VoiceCommandHandler::isRecording() const {
@@ -273,12 +336,180 @@ void VoiceCommandHandler::ensureTemporaryDirectory() {
     }
 }
 
-std::string VoiceCommandHandler::processAudioData() {
-    // TODO: Implement Whisper integration in Phase 2
-    return "";
+void VoiceCommandHandler::cleanupAudioFile() {
+    if (!_lastAudioPath.empty()) {
+        try {
+            std::filesystem::remove(_lastAudioPath);
+            LINFO(std::format("Cleaned up audio file: {}", _lastAudioPath));
+            _lastAudioPath.clear();
+            _needsRetry = false;
+        }
+        catch (const std::filesystem::filesystem_error& e) {
+            LWARNING(std::format("Failed to clean up audio file: {}", e.what()));
+        }
+    }
 }
 
-void VoiceCommandHandler::generateAndExecuteScript(const std::string& transcription) {
+std::string VoiceCommandHandler::processAudioData() {
+    if (_lastAudioPath.empty()) {
+        LERROR("No audio file available for processing");
+        setError("No audio file available for processing");
+        return "";
+    }
+
+    // Get the path to the Python script relative to the executable
+    const std::filesystem::path scriptPath = 
+        absPath("${MODULE_BASE}/scripts/voice/voice_service.py");
+
+    // Build the command to capture both stdout and stderr
+    const std::string command = std::format(
+        "python3 '{}' '{}' 2>&1",
+        scriptPath.string(),
+        _lastAudioPath
+    );
+
+    LINFO(std::format("Executing command: {}", command));
+
+    // Execute the Python script and capture its output
+    std::array<char, 1024> buffer;  // Increased buffer size
+    std::string result;
+    std::string debug_output;
+    FILE* pipe = popen(command.c_str(), "r");
+    
+    if (!pipe) {
+        LERROR("Failed to execute Python script");
+        setError("Failed to execute Python script");
+        return "";
+    }
+
+    try {
+        bool found_json = false;
+        std::string current_line;
+        
+        while (fgets(buffer.data(), buffer.size(), pipe) != nullptr) {
+            current_line = buffer.data();
+            
+            // Trim whitespace from the start and end of the line
+            const size_t start = current_line.find_first_not_of(" \t\n\r");
+            if (start == std::string::npos) {
+                // Line is all whitespace, skip it
+                continue;
+            }
+            
+            const size_t end = current_line.find_last_not_of(" \t\n\r");
+            if (end == std::string::npos) {
+                // This shouldn't happen if start is valid, but handle it anyway
+                continue;
+            }
+            
+            current_line = current_line.substr(start, end - start + 1);
+            
+            // Skip empty lines
+            if (current_line.empty()) {
+                continue;
+            }
+            
+            // Check if this line looks like JSON
+            if (current_line[0] == '{') {
+                result = current_line;
+                found_json = true;
+                LDEBUG(std::format("Found JSON line: {}", current_line));
+                // Don't add this line to debug output
+                continue;
+            }
+            
+            debug_output += current_line + "\n";
+        }
+        
+        // Log any debug output
+        if (!debug_output.empty()) {
+            LINFO(std::format("Python script debug output:\n{}", debug_output));
+        }
+        
+        if (!found_json) {
+            LERROR("No JSON output found in Python script output");
+            LERROR("Full debug output was:");
+            LERROR(debug_output);
+            setError("Failed to get transcription result");
+            return "";
+        }
+    }
+    catch (const std::exception& e) {
+        LERROR(std::format("Error reading Python script output: {}", e.what()));
+        pclose(pipe);
+        setError(std::format("Error reading Python script output: {}", e.what()));
+        return "";
+    }
+
+    const int status = pclose(pipe);
+    if (status != 0) {
+        LERROR(std::format("Python script failed with status: {}", status));
+        setError(std::format("Python script failed with status: {}", status));
+        return "";
+    }
+
+    // Parse the JSON response
+    try {
+        LDEBUG("BEGIN JSON parsing");
+        LDEBUG(std::format("Raw JSON string: '{}'", result));
+        
+        LDEBUG("Attempting to parse JSON");
+        const nlohmann::json response = nlohmann::json::parse(result);
+        LDEBUG("JSON parsed successfully");
+        
+        LDEBUG("Checking error field");
+        const std::string error = response["error"].get<std::string>();
+        LDEBUG(std::format("Error field value: '{}'", error));
+        if (!error.empty()) {
+            // Only treat non-empty error fields as errors
+            LERROR(std::format("Transcription error from Python: {}", error));
+            setError(error);  // Just use the error message directly
+            return "";
+        }
+        LDEBUG("Error field check passed (empty error field = success)");
+
+        LDEBUG("Checking text field exists");
+        if (!response.contains("text")) {
+            LERROR("JSON response missing 'text' field");
+            setError("Invalid transcription response");
+            return "";
+        }
+        LDEBUG("Text field exists");
+
+        LDEBUG("Extracting text field");
+        const std::string transcription = response["text"].get<std::string>();
+        LDEBUG(std::format("Raw text field value: '{}'", transcription));
+
+        LDEBUG("Checking if text is empty");
+        if (transcription.empty()) {
+            LERROR("Empty transcription received");
+            setError("No speech detected");
+            return "";
+        }
+        LDEBUG(std::format("Text is not empty, length: {}", transcription.length()));
+
+        // Success case - clear error and return transcription
+        LINFO(std::format("Transcription successful: '{}'", transcription));
+        setError("");  // Clear any previous error
+        _needsRetry = false;  // Successful transcription, no retry needed
+        LDEBUG(std::format("Returning transcription: '{}'", transcription));
+        return transcription;
+    }
+    catch (const nlohmann::json::exception& e) {
+        LERROR(std::format("Failed to parse Python script output: {}", e.what()));
+        LERROR(std::format("Raw output was: {}", result));
+        setError(std::format("Failed to parse transcription result: {}", e.what()));
+        return "";
+    }
+    catch (const std::exception& e) {
+        LERROR(std::format("Unexpected error while processing JSON: {}", e.what()));
+        LERROR(std::format("Raw output was: {}", result));
+        setError(std::format("Unexpected error: {}", e.what()));
+        return "";
+    }
+}
+
+void VoiceCommandHandler::generateAndExecuteScript([[maybe_unused]] const std::string& transcription) {
     // TODO: Implement script generation and execution in Phase 3
 }
 
@@ -334,7 +565,12 @@ void VoiceCommandHandler::setState(VoiceState state) {
 void VoiceCommandHandler::setTranscription(const std::string& transcription) {
     if (_transcription != transcription) {
         _transcription = transcription;
-        setState(VoiceState::Idle); // Transcription complete, return to idle
+        if (!transcription.empty()) {
+            // Only clean up the audio file if we have a successful transcription
+            cleanupAudioFile();
+            // Set state to idle only on successful transcription
+            setState(VoiceState::Idle);
+        }
     }
 }
 
