@@ -63,6 +63,8 @@ public:
         Idle = 0,
         Recording,
         Processing,
+        GeneratingScript,  // New state for LLM script generation
+        Success,          // New state for successful script generation
         Error
     };
 
@@ -90,6 +92,12 @@ public:
      * Stops recording audio and processes the recorded data
      */
     bool stopRecording();
+
+    /**
+     * Confirms the current transcription and generates/executes a script
+     * @return true if successful, false if no transcription available or in wrong state
+     */
+    bool confirmTranscription();
 
     /**
      * Checks if voice recording is currently active

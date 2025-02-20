@@ -67,28 +67,36 @@ VoiceCommandTopic::~VoiceCommandTopic() {
 }
 
 void VoiceCommandTopic::handleJson(const nlohmann::json& json) {
-    if (!json.contains(EventKey)) {
-        return;
-    }
-
-    const std::string event = json.at(EventKey).get<std::string>();
-    
-    if (event == StartSubscription) {
-        _isSubscribed = true;
-        setupStateChangeCallback();
-        // Send initial state
-        sendStateUpdate();
-    }
-    else if (event == StopSubscription) {
-        if (_voiceHandler && _callbackHandle != -1) {
-            _voiceHandler->removeStateChangeCallback(_callbackHandle);
-            _callbackHandle = -1;
+    if (json.contains(EventKey)) {
+        const std::string event = json.at(EventKey).get<std::string>();
+        
+        if (event == StartSubscription) {
+            _isSubscribed = true;
+            setupStateChangeCallback();
+            // Send initial state
+            sendStateUpdate();
         }
-        _isSubscribed = false;
-        _isDone = true;
+        else if (event == StopSubscription) {
+            if (_voiceHandler && _callbackHandle != -1) {
+                _voiceHandler->removeStateChangeCallback(_callbackHandle);
+                _callbackHandle = -1;
+            }
+            _isSubscribed = false;
+            _isDone = true;
+        }
+        else if (event == RefreshSubscription) {
+            sendStateUpdate();
+        }
     }
-    else if (event == RefreshSubscription) {
-        sendStateUpdate();
+    else if (json.contains("action")) {
+        const std::string action = json["action"].get<std::string>();
+        
+        if (action == "confirm_transcription" && _voiceHandler) {
+            LDEBUG("Received confirm_transcription action");
+            if (!_voiceHandler->confirmTranscription()) {
+                LWARNING("Failed to confirm transcription");
+            }
+        }
     }
 }
 
@@ -134,6 +142,12 @@ void VoiceCommandTopic::sendStateUpdate() {
             break;
         case interaction::VoiceCommandHandler::VoiceState::Processing:
             stateStr = "processing";
+            break;
+        case interaction::VoiceCommandHandler::VoiceState::GeneratingScript:
+            stateStr = "generating";
+            break;
+        case interaction::VoiceCommandHandler::VoiceState::Success:
+            stateStr = "success";
             break;
         case interaction::VoiceCommandHandler::VoiceState::Error:
             stateStr = "error";

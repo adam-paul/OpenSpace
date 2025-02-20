@@ -102,6 +102,16 @@ void VoiceCommandHandler::handleWebGuiMessage(const std::string& message) {
             else if (action == "stop_recording") {
                 stopRecording();
             }
+            else if (action == "confirm_transcription") {
+                // Handle transcription confirmation
+                if (_state == VoiceState::Idle && !_transcription.empty()) {
+                    generateAndExecuteScript(_transcription);
+                }
+                else {
+                    LWARNING("Cannot confirm transcription: No transcription available or not in idle state");
+                    setError("No transcription available or not in idle state");
+                }
+            }
         }
     }
     catch (const nlohmann::json::exception& e) {
@@ -158,7 +168,7 @@ bool VoiceCommandHandler::startRecording() {
         ma_device_config config = ma_device_config_init(ma_device_type_capture);
         config.capture.format = ma_format_f32;
         config.capture.channels = _channels;
-        config.sampleRate = _sampleRate;
+        config.sampleRate = _sampleRate;  // sampleRate is at the root level, not under capture
         config.dataCallback = audioDataCallback;
         config.pUserData = this;
 
@@ -509,8 +519,125 @@ std::string VoiceCommandHandler::processAudioData() {
     }
 }
 
-void VoiceCommandHandler::generateAndExecuteScript([[maybe_unused]] const std::string& transcription) {
-    // TODO: Implement script generation and execution in Phase 3
+void VoiceCommandHandler::generateAndExecuteScript(const std::string& transcription) {
+    if (transcription.empty()) {
+        LERROR("Cannot generate script from empty transcription");
+        setError("Empty transcription");
+        return;
+    }
+
+    setState(VoiceState::GeneratingScript);
+    LINFO(std::format("Generating script for transcription: '{}'", transcription));
+
+    // Get the path to the Python script relative to the executable
+    const std::filesystem::path scriptPath = 
+        absPath("${MODULE_BASE}/scripts/voice/llm_service.py");
+
+    // Build the command to capture both stdout and stderr
+    const std::string command = std::format(
+        "python3 '{}' '{}' 2> /tmp/openspace_voice/llm_error.log",  // Redirect stderr to file
+        scriptPath.string(),
+        transcription
+    );
+
+    LINFO(std::format("Executing command: {}", command));
+
+    // Execute the Python script and capture its output
+    std::array<char, 4096> buffer;  // Increased buffer size
+    std::string result;
+    FILE* pipe = popen(command.c_str(), "r");
+    
+    if (!pipe) {
+        LERROR("Failed to execute LLM script generation service");
+        setError("Failed to execute script generation service");
+        setState(VoiceState::Error);
+        return;
+    }
+
+    // Read the entire output at once
+    size_t bytes_read = fread(buffer.data(), 1, buffer.size() - 1, pipe);
+    if (bytes_read > 0) {
+        buffer[bytes_read] = '\0';  // Null terminate
+        result = buffer.data();
+    }
+
+    const int status = pclose(pipe);
+    if (status != 0) {
+        // Read the error log if available
+        std::string error_output;
+        std::ifstream error_log("/tmp/openspace_voice/llm_error.log");
+        if (error_log) {
+            std::stringstream buffer;
+            buffer << error_log.rdbuf();
+            error_output = buffer.str();
+        }
+        
+        LERROR(std::format(
+            "LLM service exited with status {}\nStdout: {}\nStderr: {}",
+            status, result, error_output
+        ));
+        setError("Script generation failed");
+        setState(VoiceState::Error);
+        return;
+    }
+
+    try {
+        // Trim any whitespace
+        result.erase(0, result.find_first_not_of(" \t\n\r"));
+        result.erase(result.find_last_not_of(" \t\n\r") + 1);
+        
+        LDEBUG(std::format("Parsing JSON response: {}", result));
+        
+        const nlohmann::json response = nlohmann::json::parse(result);
+        
+        if (!response["success"].get<bool>()) {
+            const std::string error = response["error"].get<std::string>();
+            LERROR(std::format("Script generation failed: {}", error));
+            setError(std::format("Script generation failed: {}", error));
+            setState(VoiceState::Error);
+            return;
+        }
+
+        const std::string luaScript = response["script"].get<std::string>();
+        if (luaScript.empty()) {
+            LERROR("Generated script is empty");
+            setError("Generated script is empty");
+            setState(VoiceState::Error);
+            return;
+        }
+
+        LINFO("Successfully generated Lua script");
+        LDEBUG(std::format("Generated script:\n{}", luaScript));
+
+        // Queue the script for execution
+        global::scriptEngine->queueScript({
+            .code = luaScript,
+            .synchronized = scripting::ScriptEngine::Script::ShouldBeSynchronized::Yes,
+            .sendToRemote = scripting::ScriptEngine::Script::ShouldSendToRemote::Yes
+        });
+
+        // Success - show success state briefly before returning to idle
+        setError("");
+        setState(VoiceState::Success);
+        
+        // Schedule return to idle state after a short delay
+        std::thread([this]() {
+            std::this_thread::sleep_for(std::chrono::seconds(2));
+            setState(VoiceState::Idle);
+        }).detach();
+    }
+    catch (const nlohmann::json::exception& e) {
+        LERROR(std::format("Failed to parse LLM service output: {}", e.what()));
+        LERROR(std::format("Raw output was: {}", result));
+        setError(std::format("Failed to parse script generation result: {}", e.what()));
+        setState(VoiceState::Error);
+    }
+    catch (const std::exception& e) {
+        LERROR(std::format("Unexpected error while processing script: {}", e.what()));
+        LERROR(std::format("Raw output was: {}", result));
+        setError(std::format("Unexpected error: {}", e.what()));
+        setState(VoiceState::Error);
+    }
 }
 
 VoiceCommandHandler::CallbackHandle VoiceCommandHandler::addStateChangeCallback(
@@ -581,6 +708,17 @@ void VoiceCommandHandler::setError(const std::string& error) {
             setState(VoiceState::Error);
         }
     }
+}
+
+bool VoiceCommandHandler::confirmTranscription() {
+    if (_state != VoiceState::Idle || _transcription.empty()) {
+        setError("No transcription available or not in idle state");
+        return false;
+    }
+
+    LINFO(std::format("Confirming transcription: '{}'", _transcription));
+    generateAndExecuteScript(_transcription);
+    return true;
 }
 
 } // namespace openspace::interaction 
