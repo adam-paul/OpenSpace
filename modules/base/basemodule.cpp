@@ -84,7 +84,7 @@
 #include <modules/base/translation/statictranslation.h>
 #include <modules/base/timeframe/timeframeinterval.h>
 #include <modules/base/timeframe/timeframeunion.h>
-#include <modules/base/voicecommandhandler.h>
+#include <openspace/interaction/voicecommandhandler.h>
 #include <openspace/documentation/documentation.h>
 #include <openspace/rendering/renderable.h>
 #include <openspace/rendering/screenspacerenderable.h>
@@ -99,7 +99,7 @@ ghoul::opengl::ProgramObjectManager BaseModule::ProgramObjectManager;
 ghoul::opengl::TextureManager BaseModule::TextureManager;
 
 BaseModule::BaseModule() : OpenSpaceModule(BaseModule::Name) {
-    _voiceCommandHandler = std::make_unique<VoiceCommandHandler>();
+    _voiceCommandHandler = std::make_unique<interaction::VoiceCommandHandler>();
 }
 
 void BaseModule::internalInitialize(const ghoul::Dictionary& dict) {
@@ -237,7 +237,7 @@ void BaseModule::internalDeinitializeGL() {
     TextureManager.releaseAll(ghoul::opengl::TextureManager::Warnings::Yes);
 }
 
-VoiceCommandHandler* BaseModule::voiceCommandHandler() const {
+interaction::VoiceCommandHandler* BaseModule::voiceCommandHandler() const {
     return _voiceCommandHandler.get();
 }
 
@@ -316,7 +316,8 @@ std::vector<documentation::Documentation> BaseModule::documentations() const {
 
 std::vector<scripting::LuaLibrary> BaseModule::luaLibraries() const {
     return {
-        ScreenSpaceDashboard::luaLibrary()
+        ScreenSpaceDashboard::luaLibrary(),
+        _voiceCommandHandler->luaLibrary()
     };
 }
 

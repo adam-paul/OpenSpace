@@ -32,8 +32,9 @@
 #include <memory>
 
 namespace openspace {
-
-class VoiceCommandHandler;
+namespace interaction {
+    class VoiceCommandHandler;
+} // namespace interaction
 
 class BaseModule : public OpenSpaceModule {
 public:
@@ -51,14 +52,14 @@ public:
     /**
      * Returns the voice command handler instance
      */
-    VoiceCommandHandler* voiceCommandHandler() const;
+    interaction::VoiceCommandHandler* voiceCommandHandler() const;
 
 protected:
     void internalInitialize(const ghoul::Dictionary&) override;
     void internalDeinitializeGL() override;
 
 private:
-    std::unique_ptr<VoiceCommandHandler> _voiceCommandHandler;
+    std::unique_ptr<interaction::VoiceCommandHandler> _voiceCommandHandler;
 };
 
 } // namespace openspace

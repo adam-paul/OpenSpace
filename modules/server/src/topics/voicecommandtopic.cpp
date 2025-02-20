@@ -27,22 +27,144 @@
 #include <modules/server/include/connection.h>
 #include <openspace/json.h>
 #include <ghoul/logging/logmanager.h>
+#include <openspace/engine/globals.h>
+#include <openspace/engine/moduleengine.h>
+#include <modules/base/basemodule.h>
+#include <openspace/interaction/voicecommandhandler.h>
 
 namespace {
     constexpr std::string_view _loggerCat = "VoiceCommandTopic";
+
+    constexpr const char* TypeKey = "type";
+    constexpr const char* StatusKey = "status";
+    constexpr const char* TranscriptionKey = "transcription";
+    constexpr const char* ErrorKey = "error";
+    constexpr const char* EventKey = "event";
+
+    // Subscription events
+    constexpr std::string_view StartSubscription = "start_subscription";
+    constexpr std::string_view StopSubscription = "stop_subscription";
+    constexpr std::string_view RefreshSubscription = "refresh";
 } // namespace
 
 namespace openspace {
 
+VoiceCommandTopic::VoiceCommandTopic() : _voiceHandler(nullptr) {
+    LDEBUG("Starting new VoiceCommand subscription");
+
+    // Get the VoiceCommandHandler instance from globals
+    _voiceHandler = global::voiceCommandHandler;
+
+    if (!_voiceHandler) {
+        LERROR("Could not find VoiceCommandHandler");
+    }
+}
+
+VoiceCommandTopic::~VoiceCommandTopic() {
+    if (_voiceHandler && _callbackHandle != -1) {
+        _voiceHandler->removeStateChangeCallback(_callbackHandle);
+    }
+}
+
 void VoiceCommandTopic::handleJson(const nlohmann::json& json) {
-    // Just bounce back the message for now
-    // In the future, we'll handle different types of voice command messages here
-    _connection->sendJson(json);
+    if (!json.contains(EventKey)) {
+        return;
+    }
+
+    const std::string event = json.at(EventKey).get<std::string>();
+    
+    if (event == StartSubscription) {
+        _isSubscribed = true;
+        setupStateChangeCallback();
+        // Send initial state
+        sendStateUpdate();
+    }
+    else if (event == StopSubscription) {
+        if (_voiceHandler && _callbackHandle != -1) {
+            _voiceHandler->removeStateChangeCallback(_callbackHandle);
+            _callbackHandle = -1;
+        }
+        _isSubscribed = false;
+        _isDone = true;
+    }
+    else if (event == RefreshSubscription) {
+        sendStateUpdate();
+    }
 }
 
 bool VoiceCommandTopic::isDone() const {
-    // Keep the topic alive for the entire session
-    return false;
+    return !_isSubscribed;
+}
+
+void VoiceCommandTopic::setupStateChangeCallback() {
+    if (!_voiceHandler) {
+        LERROR("Cannot setup callback: VoiceCommandHandler not available");
+        return;
+    }
+
+    // Remove existing callback if any
+    if (_callbackHandle != -1) {
+        LDEBUG("Removing existing callback");
+        _voiceHandler->removeStateChangeCallback(_callbackHandle);
+    }
+
+    // Add new callback
+    LDEBUG("Setting up new state change callback");
+    _callbackHandle = _voiceHandler->addStateChangeCallback([this]() {
+        LDEBUG("State change callback triggered - sending update");
+        sendStateUpdate();
+    });
+    LDEBUG(std::format("Callback registered with handle {}", _callbackHandle));
+}
+
+void VoiceCommandTopic::sendStateUpdate() {
+    if (!_voiceHandler) {
+        LERROR("Cannot send state update: VoiceCommandHandler not available");
+        return;
+    }
+
+    // Convert state to string
+    std::string stateStr;
+    switch (_voiceHandler->state()) {
+        case interaction::VoiceCommandHandler::VoiceState::Idle:
+            stateStr = "idle";
+            break;
+        case interaction::VoiceCommandHandler::VoiceState::Recording:
+            stateStr = "recording";
+            break;
+        case interaction::VoiceCommandHandler::VoiceState::Processing:
+            stateStr = "processing";
+            break;
+        case interaction::VoiceCommandHandler::VoiceState::Error:
+            stateStr = "error";
+            break;
+        default:
+            stateStr = "unknown";
+    }
+
+    nlohmann::json stateJson = {
+        { TypeKey, "voice_status" },
+        { StatusKey, stateStr }
+    };
+
+    LDEBUG(std::format(
+        "Sending voice state update: {} to client", stateStr
+    ));
+
+    const std::string transcription = _voiceHandler->transcription();
+    if (!transcription.empty()) {
+        stateJson[TranscriptionKey] = transcription;
+        LDEBUG(std::format("Including transcription: {}", transcription));
+    }
+
+    const std::string error = _voiceHandler->error();
+    if (!error.empty()) {
+        stateJson[ErrorKey] = error;
+        LDEBUG(std::format("Including error: {}", error));
+    }
+
+    LDEBUG("Sending WebSocket message to client");
+    _connection->sendJson(wrappedPayload(stateJson));
 }
 
 } // namespace openspace 

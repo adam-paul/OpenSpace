@@ -51,6 +51,7 @@ class SyncEngine;
 class TimeManager;
 class VersionChecker;
 struct WindowDelegate;
+
 namespace interaction {
     struct JoystickInputStates;
     struct WebsocketInputStates;
@@ -60,6 +61,7 @@ namespace interaction {
     class KeyframeRecordingHandler;
     class NavigationHandler;
     class SessionRecordingHandler;
+    class VoiceCommandHandler;
 } // namespace interaction
 namespace properties { class PropertyOwner; }
 namespace scripting {
@@ -103,6 +105,7 @@ inline properties::PropertyOwner* userPropertyOwner;
 inline scripting::ScriptEngine* scriptEngine;
 inline scripting::ScriptScheduler* scriptScheduler;
 inline Profile* profile;
+inline interaction::VoiceCommandHandler* voiceCommandHandler;
 
 void create();
 void initialize();

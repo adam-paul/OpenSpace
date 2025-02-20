@@ -69,6 +69,7 @@ set(OPENSPACE_SOURCE
   interaction/websocketinputstate.cpp
   interaction/websocketcamerastates.cpp
   interaction/tasks/convertrecformattask.cpp
+  interaction/voicecommandhandler.cpp
   mission/mission.cpp
   mission/missionmanager.cpp
   mission/missionmanager_lua.inl
@@ -260,6 +261,7 @@ set(OPENSPACE_HEADER
   ${PROJECT_SOURCE_DIR}/include/openspace/interaction/websocketinputstate.h
   ${PROJECT_SOURCE_DIR}/include/openspace/interaction/websocketcamerastates.h
   ${PROJECT_SOURCE_DIR}/include/openspace/interaction/tasks/convertrecformattask.h
+  ${PROJECT_SOURCE_DIR}/include/openspace/interaction/voicecommandhandler.h
   ${PROJECT_SOURCE_DIR}/include/openspace/mission/mission.h
   ${PROJECT_SOURCE_DIR}/include/openspace/mission/missionmanager.h
   ${PROJECT_SOURCE_DIR}/include/openspace/navigation/pathcurves/avoidcollisioncurve.h

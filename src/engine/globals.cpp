@@ -39,8 +39,9 @@
 #include <openspace/interaction/joystickinputstate.h>
 #include <openspace/interaction/websocketinputstate.h>
 #include <openspace/interaction/sessionrecordinghandler.h>
-#include <openspace/mission/missionmanager.h>
 #include <openspace/navigation/navigationhandler.h>
+#include <openspace/interaction/voicecommandhandler.h>
+#include <openspace/mission/missionmanager.h>
 #include <openspace/network/parallelpeer.h>
 #include <openspace/properties/propertyowner.h>
 #include <openspace/rendering/dashboard.h>
@@ -108,6 +109,8 @@ namespace {
 
     std::array<std::byte, TotalSize> DataStorage;
 #endif // WIN32
+
+    constexpr const char* _loggerCat = "Globals";
 } // namespace
 } // namespace openspace
 
@@ -388,6 +391,11 @@ void create() {
 #else // ^^^ WIN32 / !WIN32 vvv
     profile = new Profile;
 #endif // WIN32
+
+    LDEBUGC("Globals", "Creating 'VoiceCommandHandler'");
+    voiceCommandHandler = new interaction::VoiceCommandHandler;
+    LDEBUGC("Globals", "Initializing 'VoiceCommandHandler'");
+    voiceCommandHandler->initialize();
 }
 
 void initialize() {
@@ -414,6 +422,9 @@ void initialize() {
     rootPropertyOwner->addPropertySubOwner(global::openSpaceEngine);
 
     syncEngine->addSyncable(global::scriptEngine);
+
+    LDEBUGC("Globals", "Initializing 'VoiceCommandHandler'");
+    voiceCommandHandler->initialize();
 }
 
 void initializeGL() {
@@ -645,6 +656,10 @@ void destroy() {
     delete memoryManager;
 #endif // WIN32
 
+    LDEBUGC("Globals", "Destroying 'VoiceCommandHandler'");
+    delete voiceCommandHandler;
+    voiceCommandHandler = nullptr;
+
     callback::destroy();
 }
 
@@ -661,6 +676,9 @@ void deinitialize() {
     luaConsole->deinitialize();
     scriptEngine->deinitialize();
     fontManager->deinitialize();
+
+    LDEBUGC("Globals", "Deinitializing 'VoiceCommandHandler'");
+    voiceCommandHandler->deinitialize();
 }
 
 void deinitializeGL() {

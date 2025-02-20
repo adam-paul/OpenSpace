@@ -88,7 +88,6 @@ set(HEADER_FILES
   translation/multitranslation.h
   translation/statictranslation.h
   translation/timelinetranslation.h
-  ${CMAKE_CURRENT_SOURCE_DIR}/voicecommandhandler.h
 )
 source_group("Header Files" FILES ${HEADER_FILES})
 
@@ -157,7 +156,6 @@ set(SOURCE_FILES
   translation/multitranslation.cpp
   translation/statictranslation.cpp
   translation/timelinetranslation.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/voicecommandhandler.cpp
 )
 source_group("Source Files" FILES ${SOURCE_FILES})
 

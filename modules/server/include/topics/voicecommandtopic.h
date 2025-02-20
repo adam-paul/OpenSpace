@@ -28,21 +28,32 @@
 #include <modules/server/include/topics/topic.h>
 
 namespace openspace {
+namespace interaction {
+    class VoiceCommandHandler;
+} // namespace interaction
 
 /**
- * Topic for handling voice command messages between the frontend and backend.
+ * Topic for handling voice command state updates between the frontend and backend.
  * This topic handles:
- * - Voice recording status updates
- * - Transcription results
- * - Error messages
+ * - Subscription to voice command state changes
+ * - Broadcasting state updates to subscribed clients
  */
 class VoiceCommandTopic : public Topic {
 public:
-    VoiceCommandTopic() = default;
-    ~VoiceCommandTopic() override = default;
+    VoiceCommandTopic();
+    ~VoiceCommandTopic() override;
 
     void handleJson(const nlohmann::json& json) override;
     bool isDone() const override;
+
+private:
+    void sendStateUpdate();
+    void setupStateChangeCallback();
+
+    bool _isSubscribed = false;
+    bool _isDone = false;
+    interaction::VoiceCommandHandler* _voiceHandler = nullptr;
+    int _callbackHandle = -1;
 };
 
 } // namespace openspace
